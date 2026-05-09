@@ -1,0 +1,117 @@
+{
+  "name": "Lead Research Agent — Firecrawl + Claude",
+  "_description": "Webhook-triggered. Takes a {name, company, domain} payload, enriches via Firecrawl (search + scrape), drafts a personalized cold email with Claude, and POSTs the result back. Drop-in starter — wire your own API keys via n8n credentials.",
+  "_author": "Gamma Wira <gammawirawibowo@gmail.com>",
+  "_license": "MIT",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-research",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook (incoming lead)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "lead-research"
+    },
+    {
+      "parameters": {
+        "url": "https://api.firecrawl.dev/v1/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "firecrawlApi",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "query", "value": "={{ $json.body.name }} {{ $json.body.company }}" },
+            { "name": "limit", "value": "5" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "firecrawl-search",
+      "name": "Firecrawl: search public signals",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compress search hits into a notes string Claude can ground on.\nconst hits = ($input.first().json.data || []).slice(0, 5);\nconst notes = hits.map(h => `- ${h.title}: ${(h.description || '').slice(0, 200)}`).join('\\n');\nreturn [{ json: { notes, hits } }];"
+      },
+      "id": "compress-notes",
+      "name": "Compress notes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParametersUi": {
+          "parameter": [
+            { "name": "anthropic-version", "value": "2023-06-01" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 600,\n  \"system\": \"You are a senior B2B copywriter. Rules: <100 words, specific opener, one concrete claim, soft CTA, no hallucinations. Output ONLY valid JSON: {subject, body, confidence, flags}.\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Research notes:\\n{{ $json.notes }}\\n\\nDraft cold email JSON.\" }\n  ]\n}",
+        "options": {}
+      },
+      "id": "claude-compose",
+      "name": "Claude: compose cold email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.content?.[0]?.text || '';\nconst cleaned = raw.replace(/^```(?:json)?/, '').replace(/```$/, '').trim();\nconst draft = JSON.parse(cleaned);\nconst flags = draft.flags || [];\nif ((draft.body || '').split(' ').length > 110) flags.push('too_long');\nif (!draft.subject) flags.push('missing_subject');\nreturn [{ json: { ...draft, flags } }];"
+      },
+      "id": "parse-and-validate",
+      "name": "Parse + validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1180, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond",
+      "name": "Respond to caller",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1420, 300]
+    }
+  ],
+  "connections": {
+    "Webhook (incoming lead)": {
+      "main": [[{ "node": "Firecrawl: search public signals", "type": "main", "index": 0 }]]
+    },
+    "Firecrawl: search public signals": {
+      "main": [[{ "node": "Compress notes", "type": "main", "index": 0 }]]
+    },
+    "Compress notes": {
+      "main": [[{ "node": "Claude: compose cold email", "type": "main", "index": 0 }]]
+    },
+    "Claude: compose cold email": {
+      "main": [[{ "node": "Parse + validate", "type": "main", "index": 0 }]]
+    },
+    "Parse + validate": {
+      "main": [[{ "node": "Respond to caller", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "version": 1
+}
