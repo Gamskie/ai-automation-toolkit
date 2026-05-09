@@ -1,0 +1,151 @@
+{
+  "name": "Email Reply Classifier — Gmail + Claude Haiku",
+  "_description": "Polls Gmail for unread inbound replies to a specific outreach campaign, runs them through Claude Haiku for cheap+fast classification (interested / objection / not_now / unsubscribe / etc.), and routes by bucket into Slack channels or back into the CRM.",
+  "_author": "Gamma Wira <gammawirawibowo@gmail.com>",
+  "_license": "MIT",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] }
+      },
+      "id": "schedule",
+      "name": "Every 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {
+          "labelIds": ["INBOX", "UNREAD"],
+          "q": "label:cold-outreach is:unread"
+        },
+        "limit": 25
+      },
+      "id": "gmail-fetch",
+      "name": "Gmail: fetch unread replies",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParametersUi": {
+          "parameter": [{ "name": "anthropic-version", "value": "2023-06-01" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 300,\n  \"system\": \"Classify cold-email replies into ONE bucket: interested | objection | not_now | hard_no | unsubscribe | auto_reply | referral | other. Output ONLY JSON: {bucket, confidence, next_action}.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"Reply:\\n\\n{{ $json.snippet }}\" }]\n}",
+        "options": {}
+      },
+      "id": "classify",
+      "name": "Claude Haiku: classify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.content?.[0]?.text || '';\nconst cleaned = raw.replace(/^```(?:json)?/, '').replace(/```$/, '').trim();\nlet result = {};\ntry { result = JSON.parse(cleaned); } catch(e) { result = { bucket: 'other', confidence: 0, next_action: 'parse_failed' }; }\nreturn [{ json: { ...$('Gmail: fetch unread replies').item.json, ...result } }];"
+      },
+      "id": "merge",
+      "name": "Merge classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.bucket }}",
+        "rules": {
+          "rules": [
+            { "value2": "interested",  "output": 0 },
+            { "value2": "objection",   "output": 0 },
+            { "value2": "unsubscribe", "output": 1 },
+            { "value2": "hard_no",     "output": 2 },
+            { "value2": "not_now",     "output": 3 }
+          ]
+        },
+        "fallbackOutput": 4
+      },
+      "id": "switch",
+      "name": "Route by bucket",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1180, 300]
+    },
+    {
+      "parameters": { "channel": "#sales-warm-leads", "text": "🔥 New {{ $json.bucket }}: {{ $json.from }} — {{ $json.subject }}" },
+      "id": "slack-warm",
+      "name": "Slack: warm leads",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1420, 100]
+    },
+    {
+      "parameters": { "channel": "#sales-unsubscribe", "text": "🚫 UNSUBSCRIBE — remove {{ $json.from }} from list immediately." },
+      "id": "slack-unsub",
+      "name": "Slack: unsubscribe alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1420, 240]
+    },
+    {
+      "parameters": { "channel": "#sales-archive", "text": "❌ hard no — {{ $json.from }}" },
+      "id": "slack-hardno",
+      "name": "Slack: archive hard no",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1420, 380]
+    },
+    {
+      "parameters": { "channel": "#sales-followup", "text": "🕒 follow up later: {{ $json.from }} — {{ $json.next_action }}" },
+      "id": "slack-followup",
+      "name": "Slack: follow-up reminder",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1420, 520]
+    },
+    {
+      "parameters": { "channel": "#sales-other", "text": "🤔 unclassified ({{ $json.bucket }}): {{ $json.from }}" },
+      "id": "slack-other",
+      "name": "Slack: review queue",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1420, 660]
+    }
+  ],
+  "connections": {
+    "Every 15 min": {
+      "main": [[{ "node": "Gmail: fetch unread replies", "type": "main", "index": 0 }]]
+    },
+    "Gmail: fetch unread replies": {
+      "main": [[{ "node": "Claude Haiku: classify", "type": "main", "index": 0 }]]
+    },
+    "Claude Haiku: classify": {
+      "main": [[{ "node": "Merge classification", "type": "main", "index": 0 }]]
+    },
+    "Merge classification": {
+      "main": [[{ "node": "Route by bucket", "type": "main", "index": 0 }]]
+    },
+    "Route by bucket": {
+      "main": [
+        [{ "node": "Slack: warm leads", "type": "main", "index": 0 }],
+        [{ "node": "Slack: unsubscribe alert", "type": "main", "index": 0 }],
+        [{ "node": "Slack: archive hard no", "type": "main", "index": 0 }],
+        [{ "node": "Slack: follow-up reminder", "type": "main", "index": 0 }],
+        [{ "node": "Slack: review queue", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "version": 1
+}
