@@ -1,10 +1,10 @@
 # ai-automation-toolkit
 
-A small open-source kit of starters I'm building from as I learn AI / LLM workflow automation.
+Open-source building blocks for AI lead & revenue automation — prospect research, AI-drafted replies, inbound reply classification, follow-up logic.
 
-Maintained by [Gamma Wira](https://linkedin.com/in/gammawira) — marketing & export ops by day, Python on the side, Bandung, Indonesia.
+Maintained by [Gamma Wira](https://linkedin.com/in/gammawira) — I build AI systems that stop businesses from losing leads. Bandung, Indonesia.
 
-> Honest scope: these are starter scripts I've built to learn patterns, not battle-tested production systems running for clients. They're the foundation I'll be forking from when I take on automation work. Forks and PRs welcome.
+> Honest scope: these are starter scripts that show the patterns, not a finished product. They're the same building blocks I assemble into a full AI Lead Rescue System for clients. Forks and PRs welcome.
 
 ---
 
@@ -34,7 +34,7 @@ ai-automation-toolkit/
 
 ## Why this exists
 
-I'm pivoting from Marketing & Export Specialist into AI / automation work. Most public AI-automation code is either toy demos or locked behind agencies. This repo is what I wished I'd found when I started — small, readable, and meant to be forked.
+I build AI Lead Rescue Systems for service businesses — the systems that make sure no inquiry gets answered too slowly or dropped before it closes. Most public AI-automation code is either toy demos or locked behind agencies. This repo is what I wished I'd found when I started — small, readable, and meant to be forked.
 
 If something here saves you an hour, that's the point.
 
@@ -51,10 +51,10 @@ python3 claude_outreach_agent.py --prospect "Jane Doe @ Acme Logistics"
 
 ## Working with me
 
-I'd like to do automation work for SMBs and exporters who have a workflow that lives in Excel + email + a vendor portal. If that sounds like your team, message me on LinkedIn or email.
+I build AI Lead Rescue Systems for service businesses — agencies, consultants, contractors, clinics, studios. If your team loses leads to slow replies or dropped follow-up, message me on LinkedIn or email.
 
-📧 gammawirawibowo@gmail.com  
-🔗 [linkedin.com/in/gammawira](https://linkedin.com/in/gammawira)  
+📧 gammawirawibowo@gmail.com
+🔗 [linkedin.com/in/gammawira](https://linkedin.com/in/gammawira)
 🌐 [gamskie.github.io/gammawira-portfolio](https://gamskie.github.io/gammawira-portfolio/)
 
 ## License
